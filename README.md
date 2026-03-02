@@ -1,6 +1,6 @@
 # CLI Coding Assistant
 
-An autonomous coding agent powered by **LiteLLM** — supporting **OpenAI, Anthropic, Google Gemini, Mistral, Ollama**, and 100+ other LLM providers. A single intelligent agent works directly in your terminal: it plans, writes code, tests, and self-corrects — all in one loop. For complex tasks, it can spawn controlled sub-agents.
+An autonomous coding agent powered by **LiteLLM** supporting **OpenAI, Anthropic, Google Gemini, Mistral, Ollama**, and 100+ other LLM providers. A single intelligent agent works directly in your terminal: it plans, writes code, tests, and self-corrects, all in one loop. For complex tasks, it can spawn controlled sub-agents.
 
 ![Python Version](https://img.shields.io/badge/python-≥3.12-blue.svg)
 ![LiteLLM](https://img.shields.io/badge/Powered%20By-LiteLLM-blueviolet.svg)
@@ -36,8 +36,7 @@ An autonomous coding agent powered by **LiteLLM** — supporting **OpenAI, Anthr
 ---
 
 ## Architecture
-<img width="2874" height="1720" alt="ArchiNew" src="https://github.com/user-attachments/assets/1028dfad-000b-4bc0-b4b0-f5f312a0ff36" />
-
+<img width="1503" height="1215" alt="image" src="https://github.com/user-attachments/assets/17f81c31-4892-4d1b-b14d-37def3242fff" />
 
 
 ---
