@@ -124,7 +124,7 @@ def trim_memory(messages, max_tokens, console, model):
     total_tokens = sum(count_message_tokens(m) for m in messages)
 
     if total_tokens > max_tokens:
-        console.print(f"\n[dim yellow]⚡ Memory reached {total_tokens:,} tokens (limit: {max_tokens:,}). Summarizing older messages...[/dim yellow]")
+        console.print(f"\n[dim]Memory reached {total_tokens:,} tokens (limit: {max_tokens:,}). Summarizing older messages...[/dim]")
         
         system_prompt = messages[0]
         tail = messages[-8:]
@@ -162,7 +162,7 @@ def trim_memory(messages, max_tokens, console, model):
         }
         
         messages = [system_prompt, summary_message] + tail
-        console.print(f"[dim yellow]⚡ Memory optimized. Resuming with {sum(count_message_tokens(m) for m in messages):,} tokens.[/dim yellow]")
+        console.print(f"[dim]Memory optimized. Resuming with {sum(count_message_tokens(m) for m in messages):,} tokens.[/dim]")
 
     return messages
 
@@ -178,11 +178,11 @@ def show_diff(console, old_text, new_text, file_path):
         has_diff = True
         line = line.rstrip("\n")
         if line.startswith("+") and not line.startswith("+++"):
-            console.print(f"[green]{line}[/green]")
+            console.print(f"{line}")
         elif line.startswith("-") and not line.startswith("---"):
-            console.print(f"[red]{line}[/red]")
+            console.print(f"{line}")
         elif line.startswith("@@"):
-            console.print(f"[cyan]{line}[/cyan]")
+            console.print(f"{line}")
         else:
             console.print(f"[dim]{line}[/dim]")
 
@@ -193,17 +193,17 @@ def show_diff(console, old_text, new_text, file_path):
 def ask_approval(console, message, approve_all):
     """Prompts for approval. Returns True if approved. Handles 'a' to enable approve-all."""
     if approve_all[0]:
-        console.print(f"[dim yellow]Auto-approved: {message}[/dim yellow]")
+        console.print(f"[dim]Auto-approved: {message}[/dim]")
         return True
     
-    console.print(f"\n[bold red] WARNING: {message}[/bold red]")
+    console.print(f"\n[bold]Authorization Required: {message}[/bold]")
     approval = ''
     while approval not in ['y', 'yes', 'n', 'no', 'a']:
-        approval = console.input("[bold red](y)es / (n)o / (a)pprove all > [/bold red]").strip().lower()
+        approval = console.input("[bold](y)es / (n)o / (a)pprove all > [/bold]").strip().lower()
     
     if approval == 'a':
         approve_all[0] = True
-        console.print("[bold magenta] Approve-all enabled for this task.[/bold magenta]")
+        console.print("[bold]Approve-all enabled for this task.[/bold]")
         return True
     
     return approval in ['y', 'yes']
@@ -214,7 +214,7 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
     function_result = ""
 
     if function_name in ["get_files_info", "get_file_content", "create_directory", "web_search", "run_compiler"]:
-        with console.status(f"[bold cyan]Executing {function_name}...[/bold cyan]", spinner="dots"):
+        with console.status(f"[bold]Executing {function_name}...[/bold]", spinner="dots"):
             if function_name == "get_files_info":
                 function_result = get_file_info(working_dir, args.get("directory", "."))
                 console.print(f"[dim]Checked directory tree[/dim]")
@@ -234,9 +234,9 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
             elif function_name == "run_compiler":
                 function_result = run_compiler(working_dir, args.get("file_path"))
                 if "FATAL SYNTAX ERROR" in function_result or "Error" in function_result:
-                    console.print(Panel(function_result, title=f"❌ Compile Failed: {args.get('file_path')}", border_style="red"))
+                    console.print(Panel(function_result, title=f"Compile Failed: {args.get('file_path')}"))
                 else:
-                    console.print(f"[green]✓ {function_result}[/green]")
+                    console.print(f"[bold]Success:[/bold] {function_result}")
 
     elif function_name == "write_file":
         file_path = args.get("file_path")
@@ -249,10 +249,10 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                     old_content = f.read()
                 show_diff(console, old_content, content, file_path)
             else:
-                console.print(f"[green](new file — {len(content)} chars)[/green]")
+                console.print(f"[dim](new file — {len(content)} chars)[/dim]")
         
-        if ask_approval(console, f"Agent wants to WRITE '{file_path}'.", approve_all):
-            with console.status(f"[bold cyan]Writing {file_path}...[/bold cyan]", spinner="dots"):
+        if ask_approval(console, f"Agent wants to write '{file_path}'", approve_all):
+            with console.status(f"[bold]Writing {file_path}...[/bold]", spinner="dots"):
                 function_result = write_file(working_dir, file_path, content)
                 console.print(f"[dim]Wrote file: {file_path}[/dim]")
         else:
@@ -266,8 +266,8 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
         if not approve_all[0]:
             show_diff(console, search, replace, file_path)
         
-        if ask_approval(console, f"Agent wants to EDIT '{file_path}'.", approve_all):
-            with console.status(f"[bold cyan]Editing {file_path}...[/bold cyan]", spinner="dots"):
+        if ask_approval(console, f"Agent wants to edit '{file_path}'", approve_all):
+            with console.status(f"[bold]Editing {file_path}...[/bold]", spinner="dots"):
                 function_result = edit_file(working_dir, file_path, search, replace)
                 console.print(f"[dim]Edited file: {file_path}[/dim]")
         else:
@@ -276,8 +276,8 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
     elif function_name == "delete_file":
         file_path = args.get("file_path")
         
-        if ask_approval(console, f"Agent wants to DELETE '{file_path}'.", approve_all):
-            with console.status(f"[bold cyan]Deleting {file_path}...[/bold cyan]", spinner="dots"):
+        if ask_approval(console, f"Agent wants to delete '{file_path}'", approve_all):
+            with console.status(f"[bold]Deleting {file_path}...[/bold]", spinner="dots"):
                 function_result = delete_file(working_dir, file_path)
                 console.print(f"[dim]Deleted file: {file_path}[/dim]")
         else:
@@ -287,23 +287,23 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
         file_path = args.get("file_path")
         script_args = args.get("args", [])
         
-        if ask_approval(console, f"Agent wants to EXECUTE '{file_path}'.", approve_all):
-            with console.status(f"[bold cyan]Executing {file_path}...[/bold cyan]", spinner="dots"):
+        if ask_approval(console, f"Agent wants to execute '{file_path}'", approve_all):
+            with console.status(f"[bold]Executing {file_path}...[/bold]", spinner="dots"):
                 function_result = run_python_file(working_dir, file_path, script_args)
             # Show execution output to the user in a visible panel
             output_text = function_result.strip()
             if "Error" in function_result or "Traceback" in function_result or "Process exited with code" in function_result:
-                console.print(Panel(output_text, title=f"❌ Execution: {file_path}", border_style="red"))
+                console.print(Panel(output_text, title=f"Execution Failed: {file_path}"))
             else:
-                console.print(Panel(output_text, title=f"✓ Output: {file_path}", border_style="green"))
+                console.print(Panel(output_text, title=f"Execution Output: {file_path}"))
         else:
             function_result = "SYSTEM ERROR: User denied permission."
     
     elif function_name == "install_package":
         package_name = args.get("package_name")
         
-        if ask_approval(console, f"Agent wants to INSTALL PACKAGE: '{package_name}'.", approve_all):
-            with console.status(f"[bold cyan]Installing {package_name}...[/bold cyan]", spinner="dots"):
+        if ask_approval(console, f"Agent wants to install package: '{package_name}'", approve_all):
+            with console.status(f"[bold]Installing {package_name}...[/bold]", spinner="dots"):
                 function_result = install_package(working_dir, package_name)
                 console.print(f"[dim]Installed: {package_name}[/dim]")
         else:
@@ -316,9 +316,9 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
 
     elif function_name == "ask_user":
         question = args.get("question", "")
-        console.print("\n[bold cyan] AGENT NEEDS YOUR INPUT:[/bold cyan]")
+        console.print("\n[bold]User Input Required:[/bold]")
         console.print(Markdown(question))
-        user_feedback = console.input("\n[bold blue]Your response > [/bold blue]")
+        user_feedback = console.input("\n[bold]Your response > [/bold]")
         if user_feedback.lower() in ['exit', 'quit']:
             return "Task aborted by user."
         function_result = f"USER RESPONSE: {user_feedback}"
