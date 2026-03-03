@@ -23,7 +23,7 @@ An autonomous coding agent powered by **LiteLLM** supporting **OpenAI, Anthropic
     *   **Smart File Editing**: Preferred `edit_file` tool uses exact-match first, then fuzzy `difflib` fallback — avoiding full-file rewrites for small changes.
     *   **Syntax Checking**: `py_compile`-based compiler catches syntax errors before execution.
     *   **Fast Package Management**: Uses `uv add` to install missing dependencies on the fly.
-    *   **Web Search**: DuckDuckGo integration via `ddgs` for real-time documentation lookup.
+    *   **Web Search**: Tavily integration for real-time documentation lookup.
     *   **Project Tracking**: Automatic `PROGRESS.md` generation with checklists to track milestones.
 *   **Multi-Tiered Safety**: Interactive approval prompts for writes, edits, deletes, and execution — with an **Approve All** shortcut for hands-off mode.
 *   **Context-Aware Memory Management**:
@@ -63,7 +63,7 @@ coder-agent/
 │   ├── create_directory.py# Recursive mkdir with idempotency
 │   ├── run_compiler.py    # py_compile syntax checker
 │   ├── run_python_file.py # Subprocess execution with 30s timeout + output truncation
-│   ├── web_search.py      # DuckDuckGo search via ddgs
+│   ├── web_search.py      # Tavily web search
 │   ├── install_package.py # uv add package installer
 │   └── project_state.py   # PROGRESS.md read/write for milestone tracking
 │
@@ -95,7 +95,7 @@ coder-agent/
     uv sync
 
     # Or with pip
-    pip install litellm rich python-dotenv ddgs tenacity
+    pip install litellm rich python-dotenv tavily-python tenacity
     ```
 
 3.  Create a `.env` file with the key for your chosen provider:
@@ -105,6 +105,9 @@ coder-agent/
     # OPENAI_API_KEY=sk-your-openai-key-here
     # ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
     # GEMINI_API_KEY=your-gemini-key-here
+
+    # Required for the web_search tool
+    TAVILY_API_KEY=your-tavily-key-here
     ```
 
 ---

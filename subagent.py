@@ -51,7 +51,11 @@ def run_subagent(model, console, task_description, working_dir):
 
     console.print(f"\n[bold magenta] Sub-Agent spawned[/bold magenta]")
 
-    while True:
+    MAX_ITERATIONS = 200
+    iteration = 0
+
+    while iteration < MAX_ITERATIONS:
+        iteration += 1
         if tree_dirty:
             file_tree_cache = get_file_info(working_dir, ".")
             tree_dirty = False

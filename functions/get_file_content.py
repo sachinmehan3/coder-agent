@@ -20,7 +20,7 @@ def get_file_content(working_directory, file_path):
 
     try: 
         # Open in read mode
-        with open(abs_file_path, "r") as f:
+        with open(abs_file_path, "r", encoding="utf-8") as f:
             # Only read up to the maximum characters limit to avoid massive context bloating
             file_content_string = f.read(MAX_CHARS)
 

@@ -5,16 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "celluloid>=0.2.0",
     "colorama>=0.4.6",
-    "customtkinter>=5.2.2",
     "tavily-python>=0.5.0",
     "litellm>=1.81.15",
-    "matplotlib>=3.10.8",
-    "numpy>=2.4.2",
-    "pillow>=12.1.1",
-    "pyfiglet>=1.0.4",
-    "pygame>=2.6.1",
     "python-dotenv>=1.2.1",
     "requests>=2.32.5",
     "rich>=14.3.2",

@@ -70,7 +70,11 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
     tree_dirty = True
     FILE_MODIFYING_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
-    while True:
+    MAX_ITERATIONS = 200
+    iteration = 0
+
+    while iteration < MAX_ITERATIONS:
+        iteration += 1
         try:
             MAX_TOKENS = 30000
             messages = trim_memory(messages, MAX_TOKENS, console, model)
