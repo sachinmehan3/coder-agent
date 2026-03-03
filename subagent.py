@@ -5,6 +5,7 @@ from functions.get_files_info import get_file_info
 from ai_utils import safe_completion
 from agent_tools import SUBAGENT_TOOLS
 from agent_helpers import trim_memory, execute_tool
+from token_tracker import get_max_context_tokens
 
 SUBAGENT_SYSTEM_PROMPT = (
     "You are an autonomous Sub-Agent spawned by a main Agent to handle a specific task. "
@@ -33,21 +34,20 @@ SUBAGENT_SYSTEM_PROMPT = (
 )
 
 
-def run_subagent(model, console, task_description, working_dir):
+def run_subagent(model, console, task_description, working_dir, tracker=None):
     """Runs an isolated sub-agent that completes a task and returns a summary."""
 
     tools = SUBAGENT_TOOLS
     approve_all = [False]
-    file_tree_cache = None
-    tree_dirty = True
-    FILE_MODIFYING_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
     messages = [
         {"role": "system", "content": SUBAGENT_SYSTEM_PROMPT},
-        {"role": "user", "content": task_description}
+        {"role": "user", "content": task_description},
     ]
 
-    BASE_SYSTEM_PROMPT = messages[0]["content"]
+    # Inject file tree once as a standalone message — never mutate messages[0].
+    file_tree = get_file_info(working_dir, ".")
+    messages.append({"role": "system", "content": f"CURRENT PROJECT FILES:\n{file_tree}"})
 
     console.print(f"\n[bold magenta] Sub-Agent spawned[/bold magenta]")
 
@@ -56,16 +56,9 @@ def run_subagent(model, console, task_description, working_dir):
 
     while iteration < MAX_ITERATIONS:
         iteration += 1
-        if tree_dirty:
-            file_tree_cache = get_file_info(working_dir, ".")
-            tree_dirty = False
-        messages[0]["content"] = (
-            f"{BASE_SYSTEM_PROMPT}\n\n"
-            f" CURRENT PROJECT FILES:\n{file_tree_cache}\n\n"
-        )
 
-        MAX_TOKENS = 30000
-        messages = trim_memory(messages, MAX_TOKENS, console, model)
+        max_tokens = get_max_context_tokens(model)
+        messages = trim_memory(messages, max_tokens, console, model)
 
         with console.status("[bold magenta]Sub-Agent thinking...[/bold magenta]", spinner="dots"):
             response = safe_completion(
@@ -74,6 +67,8 @@ def run_subagent(model, console, task_description, working_dir):
                 tools=tools
             )
             
+            if tracker:
+                tracker.record(response)
             assistant_message = response.choices[0].message
             full_content = assistant_message.content if assistant_message.content else ""
             
@@ -131,8 +126,6 @@ def run_subagent(model, console, task_description, working_dir):
                 
                 function_result = execute_tool(function_name, args, working_dir, approve_all, console)
 
-                if function_name in FILE_MODIFYING_TOOLS:
-                    tree_dirty = True
 
                 messages.append({
                     "role": "tool",

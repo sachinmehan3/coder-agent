@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from agent import get_initial_messages, run_agent_loop
+from token_tracker import TokenTracker, get_max_context_tokens
 
 PROVIDER_KEY_MAP = {
     "mistral/": "MISTRAL_API_KEY",
@@ -48,9 +49,14 @@ def main():
     console.print(f"[bold green] Model: {model}[/bold green]")
 
     messages = get_initial_messages()
+    tracker = TokenTracker()
+
+    # Show detected context window
+    detected_limit = get_max_context_tokens(model)
+    console.print(f"[dim]Context limit: ~{detected_limit:,} tokens (75% of model max)[/dim]")
 
     console.print("[yellow]Starting...[/yellow]")
-    console.print("[dim]Commands: /clear, exit[/dim]")
+    console.print("[dim]Commands: /clear, /usage, exit[/dim]")
 
     while True:
         try:
@@ -58,17 +64,23 @@ def main():
             cmd = user_input.strip().lower()
             
             if cmd in ["exit", "quit"]:
+                console.print(f"\n[bold]Session Summary:[/bold]")
+                console.print(f"[dim]{tracker.format_summary()}[/dim]")
                 break
                 
             elif cmd == "/clear":
                 os.system('cls' if os.name == 'nt' else 'clear')
                 continue
-                
+
+            elif cmd == "/usage":
+                console.print(f"\n[dim]{tracker.format_summary()}[/dim]")
+                continue
 
             if not cmd:
                 continue
 
-            messages = run_agent_loop(model, console, working_dir, user_input, messages)
+            messages = run_agent_loop(model, console, working_dir, user_input, messages, tracker=tracker)
+            console.print(f"[dim]{tracker.format_summary()}[/dim]")
 
         except Exception as e:
             from rich.markup import escape

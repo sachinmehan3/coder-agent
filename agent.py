@@ -7,6 +7,7 @@ from ai_utils import safe_completion
 from agent_tools import AGENT_TOOLS
 from agent_helpers import trim_memory, execute_tool
 from subagent import run_subagent
+from token_tracker import TokenTracker, get_max_context_tokens
 
 AGENT_SYSTEM_PROMPT = (
     "You are an expert, fully autonomous coding agent working inside a project directory. "
@@ -58,7 +59,7 @@ def get_initial_messages():
     return [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
 
 
-def run_agent_loop(model, console, working_dir, user_input, messages):
+def run_agent_loop(model, console, working_dir, user_input, messages, tracker=None):
     """
     Single ReAct loop. The agent processes user input, calls tools as needed,
     and returns control to the user when it produces a text-only response.
@@ -66,9 +67,11 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
     """
     messages.append({"role": "user", "content": user_input})
     approve_all = [False]
-    file_tree_cache = None
-    tree_dirty = True
-    FILE_MODIFYING_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
+
+    # Inject file tree once as a standalone message — never mutate messages[0].
+    # The agent can call get_files_info as a tool if it needs a refresh later.
+    file_tree = get_file_info(working_dir, ".")
+    messages.append({"role": "system", "content": f"CURRENT PROJECT FILES:\n{file_tree}"})
 
     MAX_ITERATIONS = 200
     iteration = 0
@@ -76,17 +79,8 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
     while iteration < MAX_ITERATIONS:
         iteration += 1
         try:
-            MAX_TOKENS = 30000
-            messages = trim_memory(messages, MAX_TOKENS, console, model)
-
-            # Refresh file tree only when dirty
-            if tree_dirty:
-                file_tree_cache = get_file_info(working_dir, ".")
-                tree_dirty = False
-            messages[0]["content"] = (
-                f"{AGENT_SYSTEM_PROMPT}\n\n"
-                f" CURRENT PROJECT FILES:\n{file_tree_cache}\n\n"
-            )
+            max_tokens = get_max_context_tokens(model)
+            messages = trim_memory(messages, max_tokens, console, model)
 
             with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
                 response = safe_completion(
@@ -95,6 +89,8 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
                     tools=AGENT_TOOLS
                 )
                 
+                if tracker:
+                    tracker.record(response)
                 assistant_message = response.choices[0].message
                 full_content = assistant_message.content if assistant_message.content else ""
                 
@@ -152,7 +148,7 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
                     # Handle spawn_subagent specially
                     if function_name == "spawn_subagent":
                         task_desc = args.get("task_description", "")
-                        subagent_result = run_subagent(model, console, task_desc, working_dir)
+                        subagent_result = run_subagent(model, console, task_desc, working_dir, tracker=tracker)
                         
                         messages.append({
                             "role": "tool",
@@ -160,13 +156,10 @@ def run_agent_loop(model, console, working_dir, user_input, messages):
                             "content": f"SUB-AGENT RESULT:\n{subagent_result}",
                             "tool_call_id": tool_call_id
                         })
-                        tree_dirty = True
                         continue
 
                     function_result = execute_tool(function_name, args, working_dir, approve_all, console)
 
-                    if function_name in FILE_MODIFYING_TOOLS:
-                        tree_dirty = True
 
                     messages.append({
                         "role": "tool",

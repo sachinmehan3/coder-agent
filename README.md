@@ -138,7 +138,8 @@ python main.py --model ollama/llama3
 | Command  | Description                        |
 |----------|------------------------------------|
 | `/clear` | Clears the terminal screen         |
-| `exit`   | Exits the session                  |
+| `/usage` | Shows token usage and cost so far  |
+| `exit`   | Exits the session (shows summary)  |
 
 During execution the agent will prompt `(y)es / (n)o / (a)pprove all` before any destructive action (write, edit, delete, execute). Choose **a** to enable auto-approval for the rest of the current task.
 
@@ -158,9 +159,11 @@ During execution the agent will prompt `(y)es / (n)o / (a)pprove all` before any
 
 ## Memory Management
 
-*   **Active Summarization**: When history grows past the limit, `memory.py` compresses older messages into a dense LLM-generated summary, preserving key decisions without context bloat.
+*   **Active Summarization**: When history grows past the limit, `agent_helpers.py` compresses older messages into a dense LLM-generated summary, preserving key decisions without context bloat.
+*   **Dynamic Context Limits**: Token limits are auto-detected per model via `litellm.get_model_info()` (75% of model max). No more hardcoded limits — GPT-4o uses ~96k, Claude uses ~150k, etc.
 *   **Sliding Window**: The most recent 8 messages (plus all system prompts) are always preserved in full.
 *   **Summary Stacking**: Previously generated summaries are preserved verbatim — only new unsummarized messages are compressed, preventing information loss over long sessions.
+*   **Token & Cost Tracking**: Every LLM call records prompt/completion tokens and estimated cost. View live with `/usage` or see the full summary on exit.
 *   **Sub-Agent Isolation**: Sub-agents get their own context and memory, preventing complex subtasks from polluting the main agent's history.
 
 ---
