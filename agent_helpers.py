@@ -311,7 +311,10 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
 
     elif function_name == "update_tracker":
         markdown_content = args.get("markdown_content", "")
+        existing = get_progress(working_dir)
         function_result = write_progress(working_dir, markdown_content)
+        if existing and not existing.startswith("No PROGRESS.md"):
+            function_result += f"\n\nPREVIOUS CONTENT (now overwritten):\n{existing}"
         console.print(f"[dim]Updated PROGRESS.md[/dim]")
 
     elif function_name == "ask_user":

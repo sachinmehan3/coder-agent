@@ -81,9 +81,14 @@ def run_subagent(model, console, task_description, working_dir, tracker=None):
                         "arguments": tool_call.function.arguments
                     }
 
-        # Show the sub-agent's reasoning to the user
+        # Show the sub-agent's reasoning — styled like the main agent
         if full_content.strip():
-            console.print(f"[dim magenta]  {full_content.strip()}[/dim magenta]")
+            if stitched_tools:
+                # Mid-loop reasoning (tool calls coming) — dim style
+                console.print(f"[dim magenta]  {full_content.strip()}[/dim magenta]")
+            else:
+                # Standalone text output — full Markdown
+                console.print(Markdown(full_content))
 
         assistant_msg = {
             "role": "assistant",

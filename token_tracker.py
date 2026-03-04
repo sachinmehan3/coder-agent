@@ -39,7 +39,7 @@ class TokenTracker:
         cost_str = f"${self.total_cost:.4f}" if self.total_cost > 0 else "unknown"
         return (
             f"Calls: {self.call_count}  |  "
-            f"Tokens: {self.total_prompt_tokens:,} in / {self.total_completion_tokens:,} out  |  "
+            f"Tokens: {self.total_tokens:,} ({self.total_prompt_tokens:,} in / {self.total_completion_tokens:,} out)  |  "
             f"Cost: {cost_str}"
         )
 
