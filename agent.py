@@ -1,4 +1,5 @@
 import json
+import time
 from rich.markdown import Markdown
 from rich.panel import Panel
 
@@ -8,6 +9,8 @@ from agent_tools import AGENT_TOOLS
 from agent_helpers import trim_memory, execute_tool
 from subagent import run_subagent
 from token_tracker import TokenTracker, get_max_context_tokens
+from logger import get_logger
+from exceptions import CircuitBreakerTripped
 
 AGENT_SYSTEM_PROMPT = (
     "You are an expert, fully autonomous coding agent working inside a project directory. "
@@ -74,7 +77,9 @@ def run_agent_loop(model, console, working_dir, user_input, messages, tracker=No
     messages.append({"role": "system", "content": f"CURRENT PROJECT FILES:\n{file_tree}"})
 
     MAX_ITERATIONS = 200
+    CIRCUIT_BREAKER_THRESHOLD = 3
     iteration = 0
+    consecutive_failures = {}  # {tool_name: count}
 
     while iteration < MAX_ITERATIONS:
         iteration += 1
@@ -83,14 +88,27 @@ def run_agent_loop(model, console, working_dir, user_input, messages, tracker=No
             messages = trim_memory(messages, max_tokens, console, model)
 
             with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+                t0 = time.time()
                 response = safe_completion(
                     model=model,
                     messages=messages,
                     tools=AGENT_TOOLS
                 )
+                latency_ms = (time.time() - t0) * 1000
                 
                 if tracker:
                     tracker.record(response)
+                
+                # Log the LLM call
+                usage = getattr(response, "usage", None)
+                get_logger().log_llm_call(
+                    model=model,
+                    prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                    completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                    cost=tracker.total_cost if tracker else 0,
+                    latency_ms=latency_ms,
+                    source="agent"
+                )
                 assistant_message = response.choices[0].message
                 full_content = assistant_message.content if assistant_message.content else ""
                 
@@ -148,6 +166,7 @@ def run_agent_loop(model, console, working_dir, user_input, messages, tracker=No
                     # Handle spawn_subagent specially
                     if function_name == "spawn_subagent":
                         task_desc = args.get("task_description", "")
+                        get_logger().log_tool_call("spawn_subagent", args_summary=task_desc[:200], source="agent")
                         subagent_result = run_subagent(model, console, task_desc, working_dir, tracker=tracker)
                         
                         messages.append({
@@ -156,10 +175,48 @@ def run_agent_loop(model, console, working_dir, user_input, messages, tracker=No
                             "content": f"SUB-AGENT RESULT:\n{subagent_result}",
                             "tool_call_id": tool_call_id
                         })
+                        consecutive_failures.pop("spawn_subagent", None)
                         continue
 
                     function_result = execute_tool(function_name, args, working_dir, approve_all, console)
+                    is_error = "Error" in str(function_result)[:50]
+                    get_logger().log_tool_call(
+                        function_name,
+                        args_summary=args_string,
+                        success=not is_error,
+                        result_preview=str(function_result)[:200],
+                        source="agent"
+                    )
 
+                    # Circuit breaker: track consecutive failures per tool
+                    if is_error:
+                        consecutive_failures[function_name] = consecutive_failures.get(function_name, 0) + 1
+                        if consecutive_failures[function_name] >= CIRCUIT_BREAKER_THRESHOLD:
+                            get_logger().log_error(
+                                "circuit_breaker",
+                                CircuitBreakerTripped(function_name, consecutive_failures[function_name]),
+                                source="agent"
+                            )
+                            console.print(f"[bold yellow]⚠ Circuit breaker: '{function_name}' failed {consecutive_failures[function_name]} times in a row.[/bold yellow]")
+                            # Inject a system message to redirect the agent
+                            messages.append({
+                                "role": "tool",
+                                "name": function_name,
+                                "content": str(function_result),
+                                "tool_call_id": tool_call_id
+                            })
+                            messages.append({
+                                "role": "system",
+                                "content": (
+                                    f"SYSTEM WARNING: '{function_name}' has failed {consecutive_failures[function_name]} times consecutively. "
+                                    f"Stop retrying the same approach. Either try a completely different strategy, "
+                                    f"ask the user for help with `ask_user`, or explain what went wrong."
+                                )
+                            })
+                            consecutive_failures[function_name] = 0
+                            continue
+                    else:
+                        consecutive_failures.pop(function_name, None)
 
                     messages.append({
                         "role": "tool",
@@ -167,14 +224,20 @@ def run_agent_loop(model, console, working_dir, user_input, messages, tracker=No
                         "content": str(function_result),
                         "tool_call_id": tool_call_id
                     })
+                
+                # Auto-save after each iteration
+                get_logger().save_messages(messages)
                 continue
 
             # No tool calls, agent produced a text response. Return control to user.
             else:
+                get_logger().save_messages(messages)
                 return messages
                 
         except Exception as e:
             import traceback
+            get_logger().log_error("agent_loop", e, source="agent")
+            get_logger().save_messages(messages)
             console.print(f"[bold red]Error in Agent Loop:[/bold red] {e}")
             console.print(f"[bold red]Traceback:[/bold red]\n{traceback.format_exc()}")
             return messages

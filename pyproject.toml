@@ -5,11 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "colorama>=0.4.6",
     "tavily-python>=0.5.0",
     "litellm>=1.81.15",
     "python-dotenv>=1.2.1",
-    "requests>=2.32.5",
     "rich>=14.3.2",
     "tenacity>=9.1.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

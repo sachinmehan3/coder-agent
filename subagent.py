@@ -1,4 +1,5 @@
 import json
+import time
 from rich.markdown import Markdown
 
 from functions.get_files_info import get_file_info
@@ -6,6 +7,7 @@ from ai_utils import safe_completion
 from agent_tools import SUBAGENT_TOOLS
 from agent_helpers import trim_memory, execute_tool
 from token_tracker import get_max_context_tokens
+from logger import get_logger
 
 SUBAGENT_SYSTEM_PROMPT = (
     "You are an autonomous Sub-Agent spawned by a main Agent to handle a specific task. "
@@ -61,14 +63,26 @@ def run_subagent(model, console, task_description, working_dir, tracker=None):
         messages = trim_memory(messages, max_tokens, console, model)
 
         with console.status("[bold magenta]Sub-Agent thinking...[/bold magenta]", spinner="dots"):
+            t0 = time.time()
             response = safe_completion(
                 model=model,
                 messages=messages,
                 tools=tools
             )
+            latency_ms = (time.time() - t0) * 1000
             
             if tracker:
                 tracker.record(response)
+            
+            # Log the LLM call
+            usage = getattr(response, "usage", None)
+            get_logger().log_llm_call(
+                model=model,
+                prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                latency_ms=latency_ms,
+                source="subagent"
+            )
             assistant_message = response.choices[0].message
             full_content = assistant_message.content if assistant_message.content else ""
             
@@ -126,10 +140,18 @@ def run_subagent(model, console, task_description, working_dir, tracker=None):
 
                 if function_name == "finish_task":
                     summary = args.get("summary", "Sub-agent completed without summary.")
+                    get_logger().log_tool_call("finish_task", args_summary=summary[:200], source="subagent")
                     console.print(f"[bold magenta] Sub-Agent finished[/bold magenta]")
                     return summary
                 
                 function_result = execute_tool(function_name, args, working_dir, approve_all, console)
+                get_logger().log_tool_call(
+                    function_name,
+                    args_summary=args_string,
+                    success="Error" not in str(function_result)[:50],
+                    result_preview=str(function_result)[:200],
+                    source="subagent"
+                )
 
 
                 messages.append({

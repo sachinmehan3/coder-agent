@@ -38,6 +38,8 @@ venv.bak/
 # Project Specific
 workspace/
 project_state.json
+logs/
 .vscode/
 .idea/
 docs/
+tests/
