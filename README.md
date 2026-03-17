@@ -49,10 +49,13 @@ coder-agent/
 │
 ├──  main.py               # CLI entry point — arg parsing, API key resolution, REPL loop
 ├──  agent.py              # Main ReAct agent loop, system prompt, file-tree injection
-├──  agent_tools.py        # Tool schemas for main agent (AGENT_TOOLS) and sub-agent (SUBAGENT_TOOLS)
+├──  agent_tools.py        # Tool schema lists for main agent (AGENT_TOOLS) and sub-agent (SUBAGENT_TOOLS)
 ├──  agent_helpers.py      # Tool execution, approval flow, diff display, memory trimming + summarization
+├──  tool_models.py        # Pydantic models, ToolDef class, TOOL_REGISTRY — single source of truth for tools
 ├──  subagent.py           # Isolated sub-agent — own ReAct loop, auto-nudge, finish_task exit
 ├──  ai_utils.py           # LiteLLM completion wrapper with tenacity retry (rate limits, timeouts)
+├──  token_tracker.py      # Session-level token usage and cost tracking
+├──  exceptions.py         # Custom exception hierarchy (AgentError, ToolExecutionError, etc.)
 │
 ├── functions/             # Tool implementations (sandboxed to working directory)
 │   ├── get_files_info.py  # Recursive directory tree with smart ignore list
@@ -89,13 +92,9 @@ coder-agent/
     cd CLI-Coding-Assistant
     ```
 
-2.  Install dependencies (using uv or pip):
+2.  Install dependencies:
     ```bash
-    # With uv (recommended)
     uv sync
-
-    # Or with pip
-    pip install litellm rich python-dotenv tavily-python tenacity
     ```
 
 3.  Create a `.env` file with the key for your chosen provider:
@@ -110,27 +109,35 @@ coder-agent/
     TAVILY_API_KEY=your-tavily-key-here
     ```
 
+4.  *(Optional)* Install as a global CLI tool so you can run `coder-agent` from anywhere:
+    ```bash
+    uv tool install .
+    ```
+
 ---
 
 ## Usage
 
-Start by running `main.py`. You can optionally specify a target directory and/or an LLM model.
+If installed globally via `uv tool install .`:
 
 ```bash
-# Default (Mistral Medium)
-python main.py --dir my_new_project
+# Default workspace + Mistral Medium
+coder-agent
 
-# Use OpenAI
-python main.py --model gpt-4o
+# Point at an existing project directory
+coder-agent --dir /path/to/my_project
 
-# Use Anthropic
-python main.py --model anthropic/claude-sonnet-4-20250514
+# Choose a different provider
+coder-agent --model gpt-4o
+coder-agent --model anthropic/claude-sonnet-4-20250514
+coder-agent --model gemini/gemini-2.0-flash
+coder-agent --model ollama/llama3
+```
 
-# Use Google Gemini
-python main.py --model gemini/gemini-2.0-flash
+Or run directly without installing globally:
 
-# Use local Ollama
-python main.py --model ollama/llama3
+```bash
+uv run python main.py --dir my_new_project --model mistral/mistral-medium-latest
 ```
 
 ### In-Session Commands
@@ -182,8 +189,9 @@ During execution the agent will prompt `(y)es / (n)o / (a)pprove all` before any
 ## Future Additions
 
 *   **Docker Containerization**: Isolate the agent's environment and workspace for enhanced security, reproducibility, and easier deployment.
-*   **Streaming & Async**: Implement asynchronous operations and streamed responses for a faster, more responsive terminal experience while the agent generates code and plans.
-*   **Multi-File Editing**: Batch edits across multiple files in a single tool call for large refactors.
+*   **Streaming Responses**: Stream tokens to the terminal as the agent thinks, rather than waiting for a full response.
+*   **Persistent Sessions**: Save and resume conversation history across separate runs.
+*   **Parallel Tool Execution**: Execute independent tool calls concurrently to speed up multi-step tasks.
 
 ---
 

@@ -1,6 +1,5 @@
 import litellm
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from logger import get_logger
 
 litellm.drop_params = True
 
@@ -9,13 +8,6 @@ RETRY_EXCEPTIONS = (litellm.RateLimitError, litellm.ServiceUnavailableError, lit
 
 def _log_retry(retry_state):
     """Log each retry attempt for observability."""
-    get_logger()._write(
-        "llm_retry",
-        level="WARNING",
-        attempt=retry_state.attempt_number,
-        wait=round(retry_state.next_action.sleep, 1),
-        error=str(retry_state.outcome.exception()) if retry_state.outcome else "unknown"
-    )
     print(f"  API rate limit or timeout. Retrying in {retry_state.next_action.sleep}s (attempt {retry_state.attempt_number}/5)...")
 
 @retry(

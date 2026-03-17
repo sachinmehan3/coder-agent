@@ -1,6 +1,6 @@
 [project]
 name = "coder-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -10,7 +10,13 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "rich>=14.3.2",
     "tenacity>=9.1.4",
+    "pydantic>=2.12.5",
+    "google-generativeai>=0.8.6",
+    "certifi>=2024.2.2",
 ]
+
+[project.scripts]
+coder-agent = "main:main"
 
 [dependency-groups]
 dev = [
@@ -20,3 +26,11 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["main", "agent", "subagent", "agent_helpers", "agent_tools", "ai_utils", "exceptions", "tool_models", "token_tracker"]
+packages = ["functions"]

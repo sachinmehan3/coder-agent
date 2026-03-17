@@ -1,6 +1,7 @@
 import os
 import difflib
 import litellm
+from pydantic import ValidationError
 from rich.markdown import Markdown
 from rich.panel import Panel
 
@@ -18,7 +19,7 @@ from functions.run_compiler import run_compiler
 from functions.project_state import get_progress, write_progress
 
 from ai_utils import safe_completion
-from logger import get_logger
+from tool_models import TOOL_REGISTRY
 from exceptions import ToolExecutionError, ToolNotFoundError
 
 
@@ -165,7 +166,6 @@ def trim_memory(messages, max_tokens, console, model):
         
         messages = [system_prompt, summary_message] + tail
         after_tokens = sum(count_message_tokens(m) for m in messages)
-        get_logger().log_memory_trim(before_tokens=total_tokens, after_tokens=after_tokens)
         console.print(f"[dim]Memory optimized. Resuming with {after_tokens:,} tokens.[/dim]")
 
     return messages
@@ -216,45 +216,57 @@ def ask_approval(console, message, approve_all):
 def execute_tool(function_name, args, working_dir, approve_all, console):
     """Executes a single tool and returns the result string.
     
+    All arguments are validated through Pydantic models before dispatch.
     Handles errors gracefully — tool failures return clear error messages
     instead of crashing the session.
     """
     function_result = ""
 
+    # --- Pydantic validation ---
+    tool_def = TOOL_REGISTRY.get(function_name)
+    if tool_def is None:
+        return f"SYSTEM ERROR: Unknown tool '{function_name}' was called. This tool does not exist."
+
+    try:
+        validated = tool_def.parse_args(args)
+        v = validated.model_dump()  # validated dict for clean access
+    except ValidationError as e:
+        return f"Error: Invalid arguments for '{function_name}': {e}"
+
+    # --- Tool dispatch ---
     try:
         if function_name in ["get_files_info", "get_file_content", "create_directory", "web_search", "run_compiler"]:
             with console.status(f"[bold]Executing {function_name}...[/bold]", spinner="dots"):
                 if function_name == "get_files_info":
-                    function_result = get_file_info(working_dir, args.get("directory", "."))
+                    function_result = get_file_info(working_dir, v.get("directory", "."))
                     console.print(f"[dim]Checked directory tree[/dim]")
                     
                 elif function_name == "get_file_content":
-                    function_result = get_file_content(working_dir, args.get("file_path"))
-                    console.print(f"[dim]Read file: {args.get('file_path')}[/dim]")
+                    function_result = get_file_content(working_dir, v["file_path"], v.get("start_line"), v.get("end_line"))
+                    console.print(f"[dim]Read file: {v['file_path']}[/dim]")
                     
                 elif function_name == "create_directory":
-                    function_result = create_directory(working_dir, args.get("directory_path"))
-                    console.print(f"[dim]Created directory: {args.get('directory_path')}[/dim]")
+                    function_result = create_directory(working_dir, v["directory_path"])
+                    console.print(f"[dim]Created directory: {v['directory_path']}[/dim]")
                     
                 elif function_name == "web_search":
                     try:
-                        function_result = web_search(args.get("query"))
-                        console.print(f"[dim]Searched web for: {args.get('query')}[/dim]")
+                        function_result = web_search(v["query"])
+                        console.print(f"[dim]Searched web for: {v['query']}[/dim]")
                     except Exception as e:
-                        get_logger().log_error("web_search", e)
                         function_result = f"Error: Web search is temporarily unavailable ({type(e).__name__}: {e}). Try proceeding without search or ask the user for help."
                         console.print(f"[dim yellow]Web search failed (graceful degradation)[/dim yellow]")
                     
                 elif function_name == "run_compiler":
-                    function_result = run_compiler(working_dir, args.get("file_path"))
+                    function_result = run_compiler(working_dir, v["file_path"])
                     if "FATAL SYNTAX ERROR" in function_result or "Error" in function_result:
-                        console.print(Panel(function_result, title=f"Compile Failed: {args.get('file_path')}"))
+                        console.print(Panel(function_result, title=f"Compile Failed: {v['file_path']}"))
                     else:
                         console.print(f"[bold]Success:[/bold] {function_result}")
 
         elif function_name == "write_file":
-            file_path = args.get("file_path")
-            content = args.get("content")
+            file_path = v["file_path"]
+            content = v["content"]
             
             if not approve_all[0]:
                 abs_path = os.path.join(os.path.abspath(working_dir), file_path)
@@ -273,9 +285,9 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                 function_result = "SYSTEM ERROR: User denied permission to write file."
 
         elif function_name == "edit_file":
-            file_path = args.get("file_path")
-            search = args.get("search", "")
-            replace = args.get("replace", "")
+            file_path = v["file_path"]
+            search = v["search"]
+            replace = v["replace"]
             
             if not approve_all[0]:
                 show_diff(console, search, replace, file_path)
@@ -288,7 +300,7 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                 function_result = "SYSTEM ERROR: User denied permission to edit file." 
 
         elif function_name == "delete_file":
-            file_path = args.get("file_path")
+            file_path = v["file_path"]
             
             if ask_approval(console, f"Agent wants to delete '{file_path}'", approve_all):
                 with console.status(f"[bold]Deleting {file_path}...[/bold]", spinner="dots"):
@@ -298,8 +310,8 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                 function_result = "SYSTEM ERROR: User denied permission to delete file."
 
         elif function_name == "run_python_file":
-            file_path = args.get("file_path")
-            script_args = args.get("args", [])
+            file_path = v["file_path"]
+            script_args = v.get("args") or []
             
             if ask_approval(console, f"Agent wants to execute '{file_path}'", approve_all):
                 with console.status(f"[bold]Executing {file_path}...[/bold]", spinner="dots"):
@@ -314,7 +326,7 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                 function_result = "SYSTEM ERROR: User denied permission."
         
         elif function_name == "install_package":
-            package_name = args.get("package_name")
+            package_name = v["package_name"]
             
             if ask_approval(console, f"Agent wants to install package: '{package_name}'", approve_all):
                 with console.status(f"[bold]Installing {package_name}...[/bold]", spinner="dots"):
@@ -324,7 +336,7 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
                 function_result = "SYSTEM ERROR: User denied permission."
 
         elif function_name == "update_tracker":
-            markdown_content = args.get("markdown_content", "")
+            markdown_content = v["markdown_content"]
             existing = get_progress(working_dir)
             function_result = write_progress(working_dir, markdown_content)
             if existing and not existing.startswith("No PROGRESS.md"):
@@ -332,7 +344,7 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
             console.print(f"[dim]Updated PROGRESS.md[/dim]")
 
         elif function_name == "ask_user":
-            question = args.get("question", "")
+            question = v["question"]
             console.print("\n[bold]User Input Required:[/bold]")
             console.print(Markdown(question))
             user_feedback = console.input("\n[bold]Your response > [/bold]")
@@ -341,17 +353,13 @@ def execute_tool(function_name, args, working_dir, approve_all, console):
             function_result = f"USER RESPONSE: {user_feedback}"
 
         else:
-            get_logger().log_error("unknown_tool", ToolNotFoundError(function_name))
             function_result = f"SYSTEM ERROR: Unknown tool '{function_name}' was called. This tool does not exist."
 
     except FileNotFoundError as e:
-        get_logger().log_error(f"tool_{function_name}", e)
         function_result = f"Error: File not found — {e}"
     except PermissionError as e:
-        get_logger().log_error(f"tool_{function_name}", e)
         function_result = f"Error: Permission denied — {e}"
     except Exception as e:
-        get_logger().log_error(f"tool_{function_name}", e)
         function_result = f"Error: {type(e).__name__}: {e}"
 
     return function_result
