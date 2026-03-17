@@ -86,18 +86,12 @@ coder-agent/
 
 ### Installation
 
-1.  Clone the repository:
+1.  Install `coder-agent` globally from GitHub:
     ```bash
-    git clone https://github.com/sachinmehan3/CLI-Coding-Assistant.git
-    cd CLI-Coding-Assistant
+    uv tool install https://github.com/sachinmehan3/coder-agent.git
     ```
 
-2.  Install dependencies:
-    ```bash
-    uv sync
-    ```
-
-3.  Create a `.env` file with the key for your chosen provider:
+2.  Create a `.env` file in your project directory (or home directory) with the key for your chosen provider:
     ```env
     # Only the key matching your --model flag is required
     MISTRAL_API_KEY=your_mistral_key_here
@@ -109,35 +103,24 @@ coder-agent/
     TAVILY_API_KEY=your-tavily-key-here
     ```
 
-4.  *(Optional)* Install as a global CLI tool so you can run `coder-agent` from anywhere:
-    ```bash
-    uv tool install .
-    ```
-
 ---
 
 ## Usage
 
-If installed globally via `uv tool install .`:
+Navigate to your project directory, then run:
 
 ```bash
-# Default workspace + Mistral Medium
-coder-agent
-
-# Point at an existing project directory
-coder-agent --dir /path/to/my_project
-
-# Choose a different provider
-coder-agent --model gpt-4o
-coder-agent --model anthropic/claude-sonnet-4-20250514
-coder-agent --model gemini/gemini-2.0-flash
-coder-agent --model ollama/llama3
+cd /path/to/your/project
+coder-agent --dir ./
 ```
 
-Or run directly without installing globally:
+Optionally specify a different model:
 
 ```bash
-uv run python main.py --dir my_new_project --model mistral/mistral-medium-latest
+coder-agent --dir ./ --model gpt-4o
+coder-agent --dir ./ --model anthropic/claude-sonnet-4-20250514
+coder-agent --dir ./ --model gemini/gemini-2.0-flash
+coder-agent --dir ./ --model ollama/llama3
 ```
 
 ### In-Session Commands
